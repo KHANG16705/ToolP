@@ -20,8 +20,33 @@ class PipelineResult:
     applied_gamma: float | None
 
 
+def _is_noop_params(params: EnhanceParams) -> bool:
+    """Return True when no active enhancement step alters the Value (V) channel."""
+    no_denoise = params.denoise_mode == "none"
+    no_brightness = params.brightness_mode == "none" or (
+        params.brightness_mode == "gamma"
+        and not params.auto_gamma
+        and params.gamma == 1.0
+    )
+    no_negative = not params.negative
+    no_contrast = params.contrast_mode == "none"
+    no_sharpen = params.sharpen_mode == "none" or params.sharpen_alpha <= 0.0
+    return no_denoise and no_brightness and no_negative and no_contrast and no_sharpen
+
+
 def enhance_image(image_rgb: np.ndarray, params: EnhanceParams) -> PipelineResult:
     """Run the 5-step DIP pipeline on the Value (V) channel of an RGB uint8 image."""
+    if _is_noop_params(params):
+        v_channel = np.max(image_rgb, axis=2)
+        hist = compute_histogram(v_channel)
+        applied_gamma = 1.0 if params.brightness_mode == "gamma" else None
+        return PipelineResult(
+            processed_rgb=image_rgb.copy(),
+            hist_before=hist,
+            hist_after=list(hist),
+            applied_gamma=applied_gamma,
+        )
+
     # Step 1: RGB -> HSV and capture baseline histogram of V channel
     h_channel, s_channel, v_channel = rgb_to_hsv_channels(image_rgb)
     hist_before = compute_histogram(v_channel)

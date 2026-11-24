@@ -39,45 +39,57 @@ AI Agent **BẮT BUỘC** tuân thủ các nguyên tắc sau khi sinh mã nguồ
 ```text
 batch-photo-enhancer/
 ├── README.md                          # Tài liệu này (Master Spec & API Contract)
+├── HANDOFF_TV1_TV2.md                 # Hướng dẫn bàn giao & chạy thử cho TV1, TV2
+├── run_backend.bat                    # Script click đúp chạy Backend (Windows, 1 worker)
+├── run_frontend.bat                   # Script click đúp chạy Frontend (Windows)
 ├── skills/
 │   ├── SKILL_BACKEND_DIP.md           # Hướng dẫn chi tiết công thức & code Backend
 │   └── SKILL_FRONTEND_REACT.md        # Hướng dẫn chi tiết UI & tích hợp Frontend
 ├── backend/
-│   ├── main.py                        # Khởi tạo FastAPI, CORS, đăng ký routers
-│   ├── config.py                      # Hằng số cấu hình (TEMP_DIR, MAX_WORKERS, CORS)
-│   ├── requirements.txt               # Danh sách thư viện Python
+│   ├── main.py                        # Khởi tạo FastAPI, CORS, GET /health, đăng ký routers
+│   ├── config.py                      # Hằng số cấu hình (TEMP_DIR, MAX_WORKERS, giới hạn 50 ảnh/15MB)
+│   ├── requirements.txt               # Danh sách thư viện Python (dùng opencv-python-headless)
 │   ├── schemas/
 │   │   └── enhance.py                 # Pydantic models (EnhanceParams, PreviewResponse, BatchStatus)
 │   ├── core/
 │   │   ├── color_space.py             # Chuyển đổi RGB <-> HSV, tách/ghép kênh Value (V)
-│   │   ├── point_ops.py               # Negative, Log, Gamma, Auto-Gamma, Contrast Stretching
+│   │   ├── point_ops.py               # Brightness (Gamma/Auto-Gamma, Log, Contrast Stretch) -> Negative
 │   │   ├── histogram.py               # Tính Histogram, Histogram Equalization (NumPy), CLAHE
-│   │   ├── filters.py                 # Averaging, Median, Opening/Closing, Laplacian 4 & 8 lân cận
+│   │   ├── filters.py                 # Averaging, Median (cv2.medianBlur), Opening/Closing, Laplacian 4 & 8
 │   │   └── pipeline.py                # Điều phối chuỗi xử lý 5 bước chuẩn
 │   ├── services/
-│   │   └── batch_service.py           # Quản lý Job, ProcessPoolExecutor, đóng gói ZIP & dọn file tạm
-│   └── api/
-│       └── routes.py                  # Định nghĩa 4 REST API Endpoints
+│   │   └── batch_service.py           # Quản lý Job, ProcessPoolExecutor, ZIP (giữ đuôi, _1/_2, failed_files)
+│   ├── api/
+│   │   └── routes.py                  # Định nghĩa 4 REST API Endpoints
+│   └── tests/
+│       └── test_dip_and_api.py        # Bộ test tự động kiểm tra toán học DIP, API & đa tiến trình
 └── frontend/
     ├── .env                           # VITE_API_URL=http://127.0.0.1:8000
-    ├── package.json
+    ├── .env.example
+    ├── package.json                   # React + Vite + Tailwind + Axios + Recharts + Lucide
     ├── index.html
     └── src/
         ├── main.jsx
         ├── App.jsx                    # Layout chính điều phối trạng thái
         ├── constants/
-        │   └── defaultParams.js       # Giá trị mặc định cho EnhanceParams
+        │   └── defaultParams.js       # Giá trị mặc định cho EnhanceParams & giới hạn upload
         ├── services/
-        │   └── api.js                 # Axios client + 4 hàm gọi API chuẩn Contract
+        │   └── api.js                 # Axios client + hàm gọi API chuẩn Contract
         ├── utils/
         │   └── imageResize.js         # Resize ảnh mẫu xuống max 800px trên Canvas
         └── components/
             ├── UploadDropzone.jsx     # Kéo-thả nhiều ảnh & danh sách ảnh đã chọn
-            ├── ControlPanel.jsx       # Thanh trượt & nút chọn thuật toán
+            ├── ControlPanel.jsx       # Thanh trượt & nút chọn thuật toán (4 bước UI)
             ├── BeforeAfterSlider.jsx  # Thanh gạt so sánh ảnh Trước / Sau
-            ├── HistogramChart.jsx     # Biểu đồ 256 mức xám (Trước & Sau)
-            └── BatchProgressModal.jsx # Thanh tiến độ xử lý hàng loạt & nút tải ZIP
+            ├── HistogramChart.jsx     # Biểu đồ 256 mức xám (Recharts — Trước & Sau)
+            └── BatchProgressModal.jsx # Thanh tiến độ xử lý hàng loạt, cảnh báo failed_files & tải ZIP
 ```
+
+### Quy ước phân công & Git Flow (Nhóm 3 người)
+* **Nhánh chính:** `main` (chứa nền tảng đã kiểm thử) và 3 nhánh công việc:
+  * `feat/backend-core` — **Lead:** Toàn bộ `backend/` + tích hợp hệ thống.
+  * `feat/frontend-ui` — **TV1:** Toàn bộ 5 component UI + `App.jsx` trong `frontend/src/`.
+  * `docs/dataset-report` — **TV2:** Bộ ảnh kiểm thử (Dataset), QA trên Swagger/UI và Báo cáo.
 
 ---
 
@@ -118,7 +130,7 @@ Dùng chung cho cả `/api/preview` và `/api/batch-process` (gửi dưới dạ
 | `gamma` | `float` | `0.2` đến `4.0` (mặc định `1.0`) | Hệ số mũ Gamma (`< 1` sáng lên, `> 1` tối đi) |
 | `auto_gamma` | `bool` | `true` / `false` | Tự động tính Gamma theo độ sáng trung bình ảnh |
 | `log_c` | `float` | `0.5` đến `2.0` (mặc định `1.0`) | Hệ số khuếch đại cho biến đổi Logarit |
-| `negative` | `bool` | `true` / `false` | Bật/tắt biến đổi âm bản (`s = 255 - r`) |
+| `negative` | `bool` | `true` / `false` | Bật/tắt biến đổi âm bản (`s = 255 - r`). **Thứ tự thực thi:** chạy `brightness_mode` trước $\rightarrow$ nếu `negative == true` tính `255 - V` $\rightarrow$ sang `contrast_mode` |
 | `stretch_r1`, `stretch_s1` | `int` | `0` đến `255` (`r1 < r2`) | Điểm mốc thấp `(r1, s1)` cho Contrast Stretching |
 | `stretch_r2`, `stretch_s2` | `int` | `0` đến `255` (`r1 < r2`) | Điểm mốc cao `(r2, s2)` cho Contrast Stretching |
 | `contrast_mode` | `string` | `"none"`, `"hist_eq"`, `"clahe"` | Cân bằng Histogram toàn cục hoặc CLAHE cục bộ (Bước 3B) |
@@ -128,12 +140,25 @@ Dùng chung cho cả `/api/preview` và `/api/batch-process` (gửi dưới dạ
 
 ---
 
-### 4.2. Chi tiết 4 API Endpoints
+### 4.2. Chi tiết Các API Endpoints (4 Core + 1 Health Check)
+
+**Quy định chung về Upload (cả FE & BE):**
+* **Định dạng ảnh chấp nhận (MIME Types):** `image/jpeg`, `image/png`, `image/webp` (trả `400 Bad Request` nếu sai định dạng).
+* **Giới hạn Server:** Tối đa **50 ảnh/batch**, tối đa **15MB/ảnh**.
+* **Đóng gói Batch ZIP:** Giữ nguyên đuôi ảnh gốc (`.jpg`/`.jpeg`/`.png`/`.webp`); nếu trùng tên file tự thêm hậu tố `_1`, `_2`; nếu có ảnh hỏng/không giải mã được sẽ bỏ qua ảnh đó và ghi vào `failed_files` thay vì làm fail cả batch.
+
+#### 0) `GET /health`
+* **Response (`200 OK`, `application/json`):**
+```json
+{
+  "status": "ok"
+}
+```
 
 #### 1) `POST /api/preview`
 * **Content-Type:** `multipart/form-data`
 * **Form Fields:**
-  * `file`: 1 file ảnh mẫu (JPEG/PNG).
+  * `file`: 1 file ảnh mẫu (`image/jpeg`, `image/png`, `image/webp`, tối đa `15MB`).
   * `params`: Chuỗi JSON tuân theo schema `EnhanceParams`.
 * **Response (`200 OK`, `application/json`):**
 ```json
@@ -145,11 +170,12 @@ Dùng chung cho cả `/api/preview` và `/api/batch-process` (gửi dưới dạ
   "processing_time_ms": 42.5
 }
 ```
+*(Lưu ý: `applied_gamma` có kiểu `float | None` — trả số thực khi `brightness_mode == "gamma"`, trả `null` ở các mode khác.)*
 
 #### 2) `POST /api/batch-process`
 * **Content-Type:** `multipart/form-data`
 * **Form Fields:**
-  * `files`: Danh sách nhiều file ảnh gốc (gửi lặp key `files`).
+  * `files`: Danh sách từ 1 đến 50 file ảnh gốc (`image/jpeg`, `image/png`, `image/webp`, mỗi file tối đa `15MB`, gửi lặp key `files`).
   * `params`: Chuỗi JSON tuân theo schema `EnhanceParams`.
 * **Response (`202 Accepted`, `application/json`):**
 ```json
@@ -168,10 +194,11 @@ Dùng chung cho cả `/api/preview` và `/api/batch-process` (gửi dưới dạ
   "processed": 15,
   "total": 25,
   "status": "processing",
+  "failed_files": [],
   "error": null
 }
 ```
-*(Các giá trị `status`: `"queued"`, `"processing"`, `"done"`, `"failed"`).*
+*(Các giá trị `status`: `"queued"`, `"processing"`, `"done"`, `"failed"`. Mảng `failed_files` liệt kê tên các ảnh hỏng bị bỏ qua trong batch.)*
 
 #### 4) `GET /api/batch-download/{job_id}`
 * **Response (`200 OK`):** `application/zip` với header `Content-Disposition: attachment; filename="enhanced_photos.zip"`.
@@ -181,18 +208,21 @@ Dùng chung cho cả `/api/preview` và `/api/batch-process` (gửi dưới dạ
 
 ## 5. HƯỚNG DẪN CHẠY & DEBUG NHANH
 
-### Chạy Backend
+> **Chạy nhanh trên Windows:** Có thể click đúp trực tiếp `run_backend.bat` và `run_frontend.bat` ở thư mục gốc dự án.
+
+### Chạy Backend (Bắt buộc chạy đúng 1 worker do `JOBS` lưu trên RAM)
 ```bash
 cd backend
-python -m venv venv
-# Windows:
+# Windows (khuyến nghị dùng py launcher):
+py -m venv venv
 venv\Scripts\activate
 # macOS / Linux:
-source venv/bin/activate
+# python3 -m venv venv && source venv/bin/activate
 
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --port 8000 --workers 1
 ```
+* Kiểm tra sức khỏe server tại: `http://127.0.0.1:8000/health`
 * Kiểm tra Swagger UI tại: `http://127.0.0.1:8000/docs`
 
 ### Chạy Frontend
@@ -201,7 +231,7 @@ cd frontend
 npm install
 npm run dev
 ```
-* Mở trình duyệt tại: `http://localhost:5173`
+* Mở trình duyệt tại: `http://127.0.0.1:5173` (hoặc `http://localhost:5173`)
 
 ### Checklist Debug nhanh khi gặp lỗi
 * **Lỗi CORS trên trình duyệt:** Kiểm tra `allow_origins` trong `backend/main.py` đã bao gồm `http://localhost:5173` và `http://127.0.0.1:5173` chưa.

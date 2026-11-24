@@ -188,6 +188,31 @@ def test_batch_multiprocessing_dedupe_fault_tolerance_and_cleanup() -> None:
     assert client.get("/api/batch-status/does-not-exist").status_code == 404
 
 
+def test_pipeline_noop_preserves_exact_rgb_and_contract() -> None:
+    """Verify no-op parameters return lossless RGB and preserve applied_gamma & histograms."""
+    rng = np.random.default_rng(42)
+    img = rng.integers(0, 256, size=(48, 64, 3), dtype=np.uint8)
+
+    params_none = EnhanceParams(
+        denoise_mode="none",
+        brightness_mode="none",
+        negative=False,
+        contrast_mode="none",
+        sharpen_mode="none",
+    )
+    res_none = enhance_image(img, params_none)
+    assert np.array_equal(res_none.processed_rgb, img)
+    assert res_none.hist_before == res_none.hist_after
+    assert len(res_none.hist_before) == 256 and sum(res_none.hist_before) == 48 * 64
+    assert res_none.applied_gamma is None
+
+    params_default_gamma = EnhanceParams()
+    res_gamma = enhance_image(img, params_default_gamma)
+    assert np.array_equal(res_gamma.processed_rgb, img)
+    assert res_gamma.hist_before == res_gamma.hist_after
+    assert res_gamma.applied_gamma == 1.0
+
+
 def test_batch_rejects_over_50_files() -> None:
     """Verify server enforces the 50-image batch limit."""
     img = np.full((16, 16, 3), 100, dtype=np.uint8)
