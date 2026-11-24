@@ -33,6 +33,8 @@ function App() {
   const [files, setFiles] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [selectedPreviewUrl, setSelectedPreviewUrl] = useState('');
+  const [selectedPreviewBlob, setSelectedPreviewBlob] = useState(null);
+  const [previewResizeError, setPreviewResizeError] = useState('');
   const [previewResponse, setPreviewResponse] = useState(null);
   const [previewStatus, setPreviewStatus] = useState('idle');
   const [previewError, setPreviewError] = useState('');
@@ -46,13 +48,41 @@ function App() {
   const selectedFile = files.find((file) => getFileKey(file) === selectedId) || null;
 
   useEffect(() => {
+    let active = true;
+    let objectUrl = '';
+
     if (!selectedFile) {
+      setSelectedPreviewBlob(null);
       setSelectedPreviewUrl('');
+      setPreviewResizeError('');
       return undefined;
     }
-    const objectUrl = URL.createObjectURL(selectedFile);
-    setSelectedPreviewUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
+
+    setSelectedPreviewBlob(null);
+    setSelectedPreviewUrl('');
+    setPreviewResizeError('');
+
+    resizeImageForPreview(selectedFile)
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSelectedPreviewBlob(blob);
+        setSelectedPreviewUrl(objectUrl);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setPreviewResizeError(
+          'Không thể tạo ảnh preview từ file đã chọn: ' +
+            (error?.message || 'định dạng ảnh không đọc được.')
+        );
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
   }, [selectedFile]);
 
   useEffect(() => {
@@ -66,7 +96,20 @@ function App() {
       return () => controller.abort();
     }
 
-    setPreviewResponse(null);
+    if (previewResizeError) {
+      setPreviewResponse(null);
+      setPreviewError(previewResizeError);
+      setPreviewStatus('error');
+      return () => controller.abort();
+    }
+
+    if (!selectedPreviewBlob) {
+      setPreviewResponse(null);
+      setPreviewError('');
+      setPreviewStatus('processing');
+      return () => controller.abort();
+    }
+
     setPreviewError('');
     setPreviewStatus('debouncing');
 
@@ -76,23 +119,8 @@ function App() {
 
       setPreviewStatus('processing');
 
-      let previewBlob;
       try {
-        previewBlob = await resizeImageForPreview(selectedFile);
-      } catch (error) {
-        if (!isCurrentRequest()) return;
-        setPreviewStatus('error');
-        setPreviewError(
-          'Không thể tạo ảnh preview từ file đã chọn: ' +
-            (error?.message || 'định dạng ảnh không đọc được.')
-        );
-        return;
-      }
-
-      if (!isCurrentRequest()) return;
-
-      try {
-        const response = await previewEnhance(previewBlob, params, controller.signal);
+        const response = await previewEnhance(selectedPreviewBlob, params, controller.signal);
         if (!isCurrentRequest()) return;
 
         const validatedResponse = validatePreviewResponse(response);
@@ -109,7 +137,7 @@ function App() {
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [selectedFile, params, previewAttempt]);
+  }, [selectedFile, selectedPreviewBlob, previewResizeError, params, previewAttempt]);
 
   useEffect(() => {
     let active = true;
@@ -210,7 +238,11 @@ function App() {
               onSelectFile={(file) => setSelectedId(getFileKey(file))}
               onClear={handleClearFiles}
             />
-            <ControlPanel params={params} onChange={setParams} />
+            <ControlPanel
+              params={params}
+              onChange={setParams}
+              appliedGamma={previewResponse?.applied_gamma ?? null}
+            />
             <BatchActionCard
               fileCount={files.length}
               onOpen={() => setBatchModalOpen(true)}

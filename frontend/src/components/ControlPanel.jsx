@@ -75,7 +75,7 @@ function Section({ number, title, children }) {
   );
 }
 
-export default function ControlPanel({ params, onChange }) {
+export default function ControlPanel({ params, onChange, appliedGamma = null }) {
   function setParam(name, value) {
     onChange((current) => ({ ...current, [name]: value }));
   }
@@ -92,7 +92,7 @@ export default function ControlPanel({ params, onChange }) {
             <SlidersHorizontal size={14} className="text-indigo-300" aria-hidden="true" />
             <h2 className="text-sm font-semibold text-white">Thông số xử lý</h2>
           </div>
-          <p className="mt-1 text-[10px] text-slate-500">Điều chỉnh cục bộ, chưa gửi lên backend</p>
+          <p className="mt-1 text-[10px] text-slate-500">Tự động cập nhật Preview sau khi điều chỉnh</p>
         </div>
         <button
           type="button"
@@ -145,6 +145,14 @@ export default function ControlPanel({ params, onChange }) {
         {params.brightness_mode === 'gamma' && (
           <>
             <ToggleField label="Tự động tính Gamma" checked={params.auto_gamma} onChange={(value) => setParam('auto_gamma', value)} />
+            {params.auto_gamma && (
+              <div className="flex items-center justify-between rounded-lg border border-indigo-400/20 bg-indigo-500/[0.07] px-3 py-2 text-[10px]">
+                <span className="text-indigo-200/80">Gamma tự động (Backend)</span>
+                <span className="font-semibold tabular-nums text-indigo-200">
+                  {typeof appliedGamma === 'number' ? appliedGamma.toFixed(2) : 'Đang tính...'}
+                </span>
+              </div>
+            )}
             <RangeField label="Gamma" value={params.gamma} {...RANGE_LIMITS.gamma} disabled={params.auto_gamma} onChange={(value) => setParam('gamma', value)} />
           </>
         )}
