@@ -24,10 +24,10 @@
 ## 2. LUỒNG TƯƠNG TÁC & KỸ THUẬT TỐI ƯU BẮT BUỘC
 
 ### 2.1. Upload & Tự động tạo ảnh mẫu 800px (`utils/imageResize.js`)
-* Khi người dùng kéo-thả nhiều ảnh (1 đến 50 ảnh):
-  * Lưu danh sách `File` gốc vào state `files` (dùng cho Batch Processing).
+* Khi người dùng kéo-thả nhiều ảnh (**1 đến 50 ảnh**, định dạng `image/jpeg`, `image/png`, `image/webp`, tối đa **15MB/ảnh** — dùng sẵn hằng số `ALLOWED_MIME_TYPES`, `MAX_BATCH_FILES`, `MAX_FILE_SIZE_BYTES` trong `constants/defaultParams.js`):
+  * Lưu danh sách `File` gốc vào state `files` (dùng cho Batch Processing); lọc/cảnh báo ngay các file sai định dạng hoặc vượt quá `15MB` / `50` ảnh.
   * Cho phép người dùng click chọn bất kỳ ảnh nào trong danh sách để làm **ảnh mẫu Preview** (mặc định là ảnh đầu tiên).
-  * Trước khi gửi lên `POST /api/preview`, dùng HTML5 `<canvas>` thu nhỏ ảnh mẫu sao cho cạnh lớn nhất `<= 800px` (`PREVIEW_MAX_WIDTH = 800`) và xuất ra `Blob` JPEG chất lượng `0.9`. Cách này giảm dung lượng tải lên từ 5MB xuống ~80KB, giúp Preview phản hồi cực nhanh.
+  * Trước khi gửi lên `POST /api/preview`, dùng hàm `resizeImageForPreview()` trong `utils/imageResize.js` thu nhỏ ảnh mẫu sao cho cạnh lớn nhất `<= 800px` (`PREVIEW_MAX_WIDTH = 800`) và xuất ra `Blob` JPEG chất lượng `0.9`. Cách này giảm dung lượng tải lên từ 5MB xuống ~80KB, giúp Preview phản hồi cực nhanh.
 
 ### 2.2. Debounce & AbortController chống spam API (Rất quan trọng)
 * Khi người dùng kéo thanh trượt (`gamma`, `sharpen_alpha`, `clahe_clip_limit`, `stretch_r1/r2`), **KHÔNG** gọi API ngay lập tức theo từng pixel di chuột.
@@ -42,22 +42,22 @@
 * Gắn nhãn nhỏ **"Ảnh gốc (Before)"** và **"Sau xử lý (After)"** ở 2 góc trên.
 
 ### 2.4. Biểu đồ Histogram 256 mức xám (`components/HistogramChart.jsx`)
-* Dùng `chart.js` (`react-chartjs-2`) hoặc `recharts` vẽ 2 đường/vùng chồng lên nhau (Area Chart):
+* Dùng **`recharts`** (đã cài sẵn trong `package.json`) vẽ 2 vùng chồng lên nhau (`AreaChart` + `ResponsiveContainer`):
   * `hist_before`: Màu xám nhạt bán trong suốt.
   * `hist_after`: Màu xanh dương/indigo bán trong suốt.
 * Trục hoành `0 -> 255` (mức cường độ sáng kênh V), ẩn bớt tick để biểu đồ thoáng đẹp.
 
 ### 2.5. Bảng điều khiển thông số bám sát giáo trình (`components/ControlPanel.jsx`)
-Chia thành 4 nhóm rõ ràng tương ứng đúng 4 bước xử lý của Backend (kèm nút **Reset mặc định**):
+Chia thành 4 nhóm rõ ràng tương ứng đúng 4 bước điều khiển cho người dùng (Backend tự chạy ngầm Bước 1 `RGB -> HSV` và Bước 5 `HSV -> RGB`), kèm nút **Reset mặc định**:
 1. **Bước 1 — Khử nhiễu (Denoising):**
    * Dropdown `denoise_mode`: Không (`none`), Lọc trung vị - Median (`median`), Lọc trung bình - Averaging (`average`), Hình thái học Mở + Đóng (`morph_open_close`).
    * Chọn kích thước cửa sổ `kernel_size`: `3x3`, `5x5`, `7x7` (chỉ hiện khi `denoise_mode !== "none"`).
 2. **Bước 2 — Độ sáng & Điểm ảnh (Point Operations):**
    * Dropdown `brightness_mode`: Không (`none`), Hiệu chỉnh Gamma (`gamma`), Biến đổi Logarit (`log`), Kéo dãn tương phản (`contrast_stretch`).
-   * Nếu `gamma`: Có nút toggle **"Tự động Gamma (Auto-Gamma)"** và thanh trượt `gamma` (`0.2` – `4.0`, bước `0.05`). Khi bật `auto_gamma`, khóa thanh trượt và hiển thị giá trị `applied_gamma` mà Backend tính được.
+   * Nếu `gamma`: Có nút toggle **"Tự động Gamma (Auto-Gamma)"** và thanh trượt `gamma` (`0.2` – `4.0`, bước `0.05`). Khi bật `auto_gamma`, khóa thanh trượt và hiển thị giá trị `applied_gamma` mà Backend tính được (lưu ý: `applied_gamma` có kiểu `number | null`, trả `null` ở các `brightness_mode` khác `gamma`).
    * Nếu `log`: Thanh trượt `log_c` (`0.5` – `2.0`).
    * Nếu `contrast_stretch`: 4 thanh trượt `r1, s1, r2, s2` (đảm bảo ràng buộc `r1 < r2`).
-   * Checkbox độc lập: **Ảnh âm bản (Negative)**.
+   * Checkbox độc lập: **Ảnh âm bản (Negative)** — Backend luôn chạy sau `brightness_mode` và trước `contrast_mode`.
 3. **Bước 3 — Cân bằng tương phản (Histogram):**
    * Radio/Dropdown `contrast_mode`: Không (`none`), Cân bằng Histogram toàn cục (`hist_eq`), CLAHE cục bộ (`clahe`).
    * Nếu `clahe`: Hiện thanh trượt `clahe_clip_limit` (`1.0` – `8.0`, bước `0.5`).
@@ -67,17 +67,17 @@ Chia thành 4 nhóm rõ ràng tương ứng đúng 4 bước xử lý của Back
 
 ### 2.6. Luồng Xử lý hàng loạt & Polling tải ZIP (`components/BatchProgressModal.jsx`)
 1. Khi bấm **"Xử lý tất cả (N ảnh)"**:
-   * Đóng gói toàn bộ `files` gốc vào `FormData` (lặp `formData.append("files", file)`), kèm `formData.append("params", JSON.stringify(params))`.
-   * Gọi `POST /api/batch-process` -> nhận `job_id`.
+   * Gọi `startBatchProcess(files, params)` trong `services/api.js` -> nhận `job_id`.
 2. Mở Modal hiển thị thanh tiến độ `processed / total` (%):
-   * Dùng `setInterval` gọi `GET /api/batch-status/{job_id}` mỗi `800ms`.
+   * Dùng `setInterval` gọi `getBatchStatus(job_id)` mỗi `800ms` (`POLL_INTERVAL_MS`).
    * Luôn dọn dẹp `clearInterval` khi `status === "done"`, `status === "failed"` hoặc khi component unmount.
+   * Kiểm tra mảng `failed_files` từ response: nếu có ảnh hỏng bị bỏ qua (`failed_files.length > 0`), hiển thị danh sách cảnh báo các tên file lỗi ngay trong Modal mà **không** chặn nút tải ZIP các ảnh đã xử lý thành công.
 3. Khi `status === "done"`:
-   * Hiển thị nút **"Tải xuống enhanced_photos.zip"** gọi `GET /api/batch-download/{job_id}` (dạng `blob` rồi kích hoạt tải file tự động qua `URL.createObjectURL`).
+   * Hiển thị nút **"Tải xuống enhanced_photos.zip"** gọi `downloadBatchZip(job_id)` (dạng `blob` rồi kích hoạt tải file tự động qua `URL.createObjectURL`).
 
 ---
 
 ## 3. YÊU CẦU XỬ LÝ LỖI & TRẠNG THÁI TRỐNG
 
-* Nếu Backend chưa bật hoặc mất kết nối: Hiện thông báo Toast/Banner rõ ràng *"Không thể kết nối Backend API. Hãy kiểm tra server FastAPI đang chạy ở cổng 8000."*
-* Không cho bấm nút "Xử lý tất cả" khi chưa có ảnh nào được tải lên.
+* Dùng sẵn `checkBackendHealth()` (`GET /health`) hoặc bắt lỗi mạng từ Axios: nếu Backend chưa bật hoặc mất kết nối, hiện thông báo Toast/Banner rõ ràng *"Không thể kết nối Backend API. Hãy kiểm tra server FastAPI đang chạy ở cổng 8000."*
+* Không cho bấm nút "Xử lý tất cả" khi chưa có ảnh nào được tải lên hoặc vượt quá `50` ảnh.
