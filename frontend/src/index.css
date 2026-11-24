@@ -20,3 +20,35 @@ body {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+html {
+  color-scheme: dark;
+  min-width: 320px;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+::selection {
+  color: #fff;
+  background: rgba(99, 102, 241, 0.4);
+}
+
+.image-grid {
+  background-color: #090e18;
+  background-image:
+    linear-gradient(45deg, rgba(148, 163, 184, 0.035) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.035) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.035) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.035) 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+}
