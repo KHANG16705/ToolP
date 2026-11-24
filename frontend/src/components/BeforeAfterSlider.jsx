@@ -59,7 +59,7 @@ export default function BeforeAfterSlider({
               src={afterUrl}
               alt="Ảnh sau xử lý"
               className="absolute inset-0 h-full w-full object-contain"
-              style={{ clipPath: 'inset(0 ' + (100 - position) + '% 0 0)' }}
+              style={{ clipPath: 'inset(0 0 0 ' + position + '%)' }}
             />
             <div className="absolute bottom-0 top-0 w-px bg-white shadow-[0_0_12px_rgba(255,255,255,0.8)]" style={{ left: position + '%' }} />
           </>
